@@ -3,7 +3,8 @@ const { validateSslRequest } = require('../validators/sslValidator');
 const forge = require('node-forge');
 const { URL } = require('url');
 const tls = require('tls');
-const axios = require('axios')
+const axios = require('axios');
+const { getCertStatus } = require('easy-ocsp');
 
 
 const getSslInfo = async (req, res) => {
@@ -11,53 +12,30 @@ const getSslInfo = async (req, res) => {
     if (error) {
         return res.status(400).send(error.details[0].message);
       }
-  const extractCrlUrl = (cert) => {
-    const crlDistributionPoints = cert.extensions.find(ext => ext.id === '2.5.29.37');
-    
-    if (!crlDistributionPoints) {
-      console.log('No CRL Distribution Points found');
-      return null;
-    }
-  
-    // Extract CRL URLs from the distribution points
-    const crlUrls = crlDistributionPoints.value
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.startsWith('URI:'))
-      .map(line => line.substring(4)); // Remove 'URI:' prefix
-  
-    return crlUrls.length ? crlUrls[0] : null; // Return the first CRL URL if available
-  };
+      function getCRLDistributionPoints(extensions) {
+        const crlExtension = extensions.find(ext => ext.id === '2.5.29.31');
+        if (crlExtension) {
+          return crlExtension.value.match(/http:\/\/[^ ]+/g);  // Extract URLs from the value
+        }
+        return null;  // Return null if no CRL distribution points are found
+      }
   
   const isRevoked = async (certPem) => {
     try {
       // Parse the certificate using forge
-      const cert = forge.pki.certificateFromPem(certPem);
-  
-      // Extract the CRL URL from the certificate's CRL Distribution Points (2.5.29.31)
-      let crlUrl = extractCrlUrl(cert);
-  
-      // If no CRL URL is found, return "Unknown"
-      if (!crlUrl) {
-        return 'Unknown'; // No CRL URL provided
-      }
-  
-      // Ensure URL has the correct protocol (default to HTTPS)
-      crlUrl = crlUrl.startsWith('http') ? crlUrl : `https://${crlUrl}`;
-  
-      // Fetch the CRL data from the extracted CRL URL
-      const response = await axios.get(crlUrl, { responseType: 'arraybuffer' });
-      const crl = forge.pki.crl.fromAsn1(forge.asn1.fromDer(response.data.toString('binary')));
-  
-      // Compare serial numbers of revoked certificates with the provided certificate's serial number
-      const certRevoked = crl.revokedCerts.some(revokedCert => 
-        revokedCert.serialNumber === cert.serialNumber
-      );
-  
-      return certRevoked ? 'Revoked' : 'Not Revoked';
+      const ocspResult = await getCertStatus(certPem);
+      const { status }= ocspResult
+    return status === 'good'? 'Not Revoked': 'Revoked'
     } catch (error) {
       console.error('Error checking revocation:', error.message || error);
-      return 'Unknown';
+    
+    // Handle specific error for expired certificates
+    if (error.message && error.message.includes('The certificate is already expired')) {
+      return 'Certificate already expired';
+    }
+
+    // For other errors, return a generic message
+    return 'Error checking revocation';
     }
   };
   
@@ -101,7 +79,6 @@ const getSslInfo = async (req, res) => {
   
             // Extract SSL certificate details
             const caValidity = certificate.issuer.attributes.some(attr => attr.shortName === 'CN' && attr.value === certificate.subject.getField('CN').value) ? 'Invalid' : 'Valid'; // Simplified         
-console.log(Object.keys(certificate))
             isRevoked(certPem)
               .then(revoked => {
                 const details = {
