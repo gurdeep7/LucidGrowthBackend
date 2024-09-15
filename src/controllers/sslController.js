@@ -3,7 +3,6 @@ const { validateSslRequest } = require('../validators/sslValidator');
 const forge = require('node-forge');
 const { URL } = require('url');
 const tls = require('tls');
-const axios = require('axios');
 const { getCertStatus } = require('easy-ocsp');
 
 
@@ -12,13 +11,7 @@ const getSslInfo = async (req, res) => {
     if (error) {
         return res.status(400).send(error.details[0].message);
       }
-      function getCRLDistributionPoints(extensions) {
-        const crlExtension = extensions.find(ext => ext.id === '2.5.29.31');
-        if (crlExtension) {
-          return crlExtension.value.match(/http:\/\/[^ ]+/g);  // Extract URLs from the value
-        }
-        return null;  // Return null if no CRL distribution points are found
-      }
+
   
   const isRevoked = async (certPem) => {
     try {
@@ -41,20 +34,6 @@ const getSslInfo = async (req, res) => {
   
 
 
-  function getCrlUrls(cert) {
-    const crlUrls = [];
-    const extensions = cert.extensions;
-  
-    for (let ext of extensions) {
-      if (ext.name === 'crlDistributionPoints') {
-        for (let dp of ext.crlDistributionPoints) {
-          crlUrls.push(dp.uri);
-        }
-      }
-    }
-    
-    return crlUrls;
-  }
   const getSslDetails = async (domain) => {
     return new Promise((resolve, reject) => {
       try {
@@ -75,7 +54,6 @@ const getSslInfo = async (req, res) => {
               forge.asn1.fromDer(Buffer.from(cert.raw).toString('binary'))
             );
             const certPem = forge.pki.certificateToPem(forge.pki.certificateFromAsn1(forge.asn1.fromDer(cert.raw.toString('binary'))));
-            const parsedCert = forge.pki.certificateFromPem(certPem);
   
             // Extract SSL certificate details
             const caValidity = certificate.issuer.attributes.some(attr => attr.shortName === 'CN' && attr.value === certificate.subject.getField('CN').value) ? 'Invalid' : 'Valid'; // Simplified         
