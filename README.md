@@ -87,6 +87,8 @@ This is a backend server built using Node.js and Express to provide SSL certific
 
 **node-forge**: Used for parsing and handling SSL certificates. It provides functions to work with various aspects of certificates.
 
+**easy-ocsp**: EasyOCSP is an easy-to-use OCSP client for Node.js that can be used to check the revocation status of X.509 TLS certificates using the Online Certificate Status Protocol (OCSP).
+
 ## Assumptions and Design Decisions
 
 - The server assumes that the input domain is correctly formatted and reachable.
