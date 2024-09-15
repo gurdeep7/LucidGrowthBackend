@@ -98,11 +98,10 @@ const getSslInfo = async (req, res) => {
             );
             const certPem = forge.pki.certificateToPem(forge.pki.certificateFromAsn1(forge.asn1.fromDer(cert.raw.toString('binary'))));
             const parsedCert = forge.pki.certificateFromPem(certPem);
-           const crlUrls = getCrlUrls(parsedCert);
   
             // Extract SSL certificate details
             const caValidity = certificate.issuer.attributes.some(attr => attr.shortName === 'CN' && attr.value === certificate.subject.getField('CN').value) ? 'Invalid' : 'Valid'; // Simplified         
-
+console.log(Object.keys(certificate))
             isRevoked(certPem)
               .then(revoked => {
                 const details = {
@@ -116,7 +115,7 @@ const getSslInfo = async (req, res) => {
                   validForDomain: certificate.subject.getField('CN').value === domain ? 'Yes' : 'No',
                   caValid: caValidity,
                   selfSigned: certificate.issuer.attributes.some(attr => attr.shortName === 'CN' && attr.value === certificate.subject.getField('CN').value) ? 'Yes' : 'No',
-                  revoked: revoked,
+                  revoked: revoked, // crl_ocsp status
                   daysRemaining: Math.floor((certificate.validity.notAfter - new Date()) / (1000 * 60 * 60 * 24)) // Days remaining until expiration
                 };
   
